@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import { prisma } from "@/app/lib/prisma";
 
 export async function GET(
-  req: Request,
-  context: { params: { id: string } }
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  // ✅ IMPORTANT: await params (Next.js 16 requirement)
+  const { id } = await context.params;
 
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -30,7 +31,9 @@ export async function GET(
   doc.text(`Invoice Number: ${invoice.invoiceNumber}`);
   doc.text(`Seller: ${invoice.sellerName}`);
   doc.text(`Status: ${invoice.status}`);
-  doc.text(`Date: ${new Date(invoice.createdAt).toLocaleDateString()}`);
+  doc.text(
+    `Date: ${new Date(invoice.createdAt).toLocaleDateString()}`
+  );
 
   doc.moveDown(2);
   doc.fontSize(12).text("Cost Breakdown", { underline: true });
