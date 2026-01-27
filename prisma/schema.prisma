@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model PrintJob {
+  id            String   @id @default(cuid())
+  designName    String
+  sellerName    String
+  material      String
+  estimatedTime Float
+  actualTime    Float?
+  filamentUsed  Float?
+  printer       String
+  status        JobStatus
+  createdAt     DateTime @default(now())
+
+  invoice       Invoice?
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  sellerName    String
+  filamentCost  Float
+  machineCost   Float
+  gst           Float
+  total         Float
+  status        InvoiceStatus
+  createdAt     DateTime @default(now())
+
+  jobId         String   @unique
+  job           PrintJob @relation(fields: [jobId], references: [id])
+}
+
+enum JobStatus {
+  PENDING
+  PRINTING
+  COMPLETED
+  FAILED
+}
+
+enum InvoiceStatus {
+  PAID
+  UNPAID
+}
