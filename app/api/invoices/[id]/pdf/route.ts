@@ -1,67 +1,69 @@
-import { NextRequest, NextResponse } from "next/server";
-import PDFDocument from "pdfkit";
+import { NextRequest } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+
+export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  // ✅ IMPORTANT: await params (Next.js 16 requirement)
-  const { id } = await context.params;
+  try {
+    const { id } = await params;
 
-  const invoice = await prisma.invoice.findUnique({
-    where: { id },
-  });
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+    });
 
-  if (!invoice) {
-    return new NextResponse("Invoice not found", { status: 404 });
+    if (!invoice) {
+      return new Response("Invoice not found", { status: 404 });
+    }
+
+    // ✅ Create PDF
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+
+    let y = 760;
+
+    function draw(text: string, size = 12) {
+      page.drawText(text, { x: 50, y, size, font });
+      y -= size + 12;
+    }
+
+    // ===== INVOICE CONTENT =====
+
+    draw("PrintFlow Invoice", 22);
+    y -= 20;
+
+    draw(`Invoice Number: ${invoice.invoiceNumber}`);
+    draw(`Seller: ${invoice.sellerName}`);
+    draw(`Status: ${invoice.status}`);
+    draw(`Date: ${new Date(invoice.createdAt).toLocaleDateString()}`);
+
+    y -= 20;
+
+   draw(`Filament Cost: Rs. ${invoice.filamentCost}`);
+   draw(`Machine Cost: Rs. ${invoice.machineCost}`);
+   draw(`GST: Rs. ${invoice.gst}`);
+   draw(`Total Amount: Rs. ${invoice.total}`, 16);
+
+    y -= 30;
+    draw("System generated invoice — no signature required", 10);
+
+    // ✅ Save PDF
+    const bytes = await pdf.save();
+
+    return new Response(bytes, {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename=${invoice.invoiceNumber}.pdf`,
+      },
+    });
+
+  } catch (err) {
+    console.error("PDF ERROR:", err);
+    return new Response("PDF failed", { status: 500 });
   }
-
-  const doc = new PDFDocument({ size: "A4", margin: 50 });
-  const chunks: Buffer[] = [];
-
-  doc.on("data", (chunk) => chunks.push(chunk));
-
-  doc.fontSize(20).text("PrintFlow", { align: "center" });
-  doc.moveDown();
-  doc.fontSize(14).text("Invoice", { align: "center" });
-  doc.moveDown(2);
-
-  doc.fontSize(10);
-  doc.text(`Invoice Number: ${invoice.invoiceNumber}`);
-  doc.text(`Seller: ${invoice.sellerName}`);
-  doc.text(`Status: ${invoice.status}`);
-  doc.text(
-    `Date: ${new Date(invoice.createdAt).toLocaleDateString()}`
-  );
-
-  doc.moveDown(2);
-  doc.fontSize(12).text("Cost Breakdown", { underline: true });
-  doc.moveDown();
-
-  doc.text(`Filament Cost: ₹${invoice.filamentCost}`);
-  doc.text(`Machine Cost: ₹${invoice.machineCost}`);
-  doc.text(`GST: ₹${invoice.gst.toFixed(2)}`);
-
-  doc.moveDown();
-  doc.fontSize(14).text(`Total: ₹${invoice.total.toFixed(2)}`);
-
-  doc.moveDown(3);
-  doc.fontSize(10).text(
-    "This is a system-generated invoice. No signature required.",
-    { align: "center" }
-  );
-
-  doc.end();
-
-  const pdfBuffer = await new Promise<Buffer>((resolve) => {
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-  });
-
-  return new NextResponse(pdfBuffer, {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename=${invoice.invoiceNumber}.pdf`,
-    },
-  });
 }
