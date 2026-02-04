@@ -1,4 +1,6 @@
-export const dynamic = "force-dynamic";
+"use client";
+
+import { useEffect, useState } from "react";
 
 type PrintJob = {
   id: string;
@@ -12,23 +14,27 @@ type PrintJob = {
   printer: string;
 };
 
-async function getJobs(): Promise<PrintJob[]> {
-  const res = await fetch("http://localhost:3000/api/print-jobs", {
-    cache: "no-store",
-  });
-  return res.json();
-}
+export default function PrintQueuePage() {
+  const [jobs, setJobs] = useState<PrintJob[]>([]);
 
-async function updateJob(payload: any) {
-  await fetch("http://localhost:3000/api/print-jobs", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}
+  async function load() {
+    const res = await fetch("/api/print-jobs");
+    const data = await res.json();
+    setJobs(data);
+  }
 
-export default async function PrintQueuePage() {
-  const jobs = await getJobs();
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function updateJob(payload: any) {
+    await fetch("/api/print-jobs", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    load();
+  }
 
   const printing = jobs.filter((j) => j.status === "PRINTING");
   const pending = jobs.filter((j) => j.status === "PENDING");
@@ -45,50 +51,40 @@ export default async function PrintQueuePage() {
             {job.sellerName} • {job.material}
           </p>
 
-          <form
-            action={async (formData) => {
-              "use server";
-              await updateJob({
-                id: job.id,
-                action: "COMPLETE",
-                actualTime: Number(formData.get("time")),
-                filamentUsed: Number(formData.get("filament")),
-              });
-            }}
-            className="flex gap-3 mt-4"
-          >
-            <input
-              name="time"
-              placeholder="Actual time (hrs)"
-              className="border p-2 rounded w-40"
-              required
-            />
-            <input
-              name="filament"
-              placeholder="Filament (g)"
-              className="border p-2 rounded w-40"
-              required
-            />
-            <button className="bg-green-600 text-white px-4 rounded">
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={async () => {
+                const time = prompt("Actual time (hours)?");
+                const filament = prompt("Filament used (g)?");
+
+                await updateJob({
+                  id: job.id,
+                  action: "COMPLETE",
+                  actualTime: Number(time),
+                  filamentUsed: Number(filament),
+                });
+              }}
+              className="bg-green-600 text-white px-4 rounded"
+            >
               Complete
             </button>
-          </form>
 
-          <button
-            onClick={async () => {
-              "use server";
-              await updateJob({ id: job.id, action: "FAIL" });
-            }}
-            className="mt-3 text-red-600 text-sm"
-          >
-            Mark Failed
-          </button>
+            <button
+              onClick={() =>
+                updateJob({ id: job.id, action: "FAIL" })
+              }
+              className="text-red-600 text-sm"
+            >
+              Mark Failed
+            </button>
+          </div>
         </div>
       ))}
 
       {/* PENDING */}
       <div>
         <h2 className="font-semibold mb-2">Pending</h2>
+
         {pending.map((job) => (
           <div
             key={job.id}
@@ -101,16 +97,14 @@ export default async function PrintQueuePage() {
               </p>
             </div>
 
-            <form
-              action={async () => {
-                "use server";
-                await updateJob({ id: job.id, action: "START" });
-              }}
+            <button
+              onClick={() =>
+                updateJob({ id: job.id, action: "START" })
+              }
+              className="bg-teal-600 text-white px-4 py-2 rounded"
             >
-              <button className="bg-teal-600 text-white px-4 py-2 rounded">
-                Start Print
-              </button>
-            </form>
+              Start Print
+            </button>
           </div>
         ))}
       </div>

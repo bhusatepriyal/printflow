@@ -15,18 +15,17 @@ type Invoice = {
 /* ================= FETCH REAL DATA ================= */
 
 async function getData() {
+  const base =
+    process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+
   const [jobsRes, invoicesRes] = await Promise.all([
-    fetch("http://localhost:3000/api/print-jobs", {
-      cache: "no-store",
-    }),
-    fetch("http://localhost:3000/api/invoices", {
-      cache: "no-store",
-    }),
+    fetch(`${base}/api/print-jobs`, { cache: "no-store" }),
+    fetch(`${base}/api/invoices`, { cache: "no-store" }),
   ]);
 
   return {
-    jobs: await jobsRes.json(),
-    invoices: await invoicesRes.json(),
+    jobs: jobsRes.ok ? await jobsRes.json() : [],
+    invoices: invoicesRes.ok ? await invoicesRes.json() : [],
   };
 }
 
@@ -35,14 +34,12 @@ async function getData() {
 export default async function AdminDashboard() {
   const { jobs, invoices } = await getData();
 
-  /* ---------- METRICS ---------- */
-
   const completedPrints = jobs.filter(
     (job: PrintJob) => job.status === "COMPLETED"
   );
 
   const totalRevenue = invoices.reduce(
-    (sum: number, inv: Invoice) => sum + inv.total,
+    (sum: number, inv: Invoice) => sum + (inv.total || 0),
     0
   );
 
@@ -58,8 +55,6 @@ export default async function AdminDashboard() {
     }
   });
 
-  /* ---------- UI ---------- */
-
   return (
     <div className="space-y-6">
       <div>
@@ -70,22 +65,10 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Revenue"
-          value={`₹${totalRevenue.toFixed(2)}`}
-        />
-        <StatCard
-          title="Prints Completed"
-          value={completedPrints.length}
-        />
-        <StatCard
-          title="PLA Used"
-          value={`${filamentStats.PLA}g`}
-        />
-        <StatCard
-          title="PETG Used"
-          value={`${filamentStats.PETG}g`}
-        />
+        <StatCard title="Total Revenue" value={`₹${totalRevenue.toFixed(2)}`} />
+        <StatCard title="Prints Completed" value={completedPrints.length} />
+        <StatCard title="PLA Used" value={`${filamentStats.PLA}g`} />
+        <StatCard title="PETG Used" value={`${filamentStats.PETG}g`} />
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border p-6 h-72 text-slate-400 flex items-center justify-center">
